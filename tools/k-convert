@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from argcomplete import autocomplete
 from pathlib import Path
 
@@ -38,6 +38,8 @@ $ echo a.b.c=7 | k-convert toml msgpack | k-convert msgpack json && echo
 parser = ArgumentParser(
     prog=prog.name,
     description='convert formatted text data between formats common',
+    epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
 )
 parser.add_argument('input', choices=formats, help='input format')
 parser.add_argument('output', choices=formats, help='output format')
