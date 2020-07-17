@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-import argparse
+from argparse import ArgumentParser, ArgumentTypeError
+from argcomplete import autocomplete
 import string
-import secrets
 from pathlib import Path
-from sys import stderr, exit
 
 
 def positive_int(text):
@@ -14,7 +13,7 @@ def positive_int(text):
             raise ValueError('not positive')
         return i
     except ValueError:
-        raise argparse.ArgumentTypeError(f"not a positive integer: {text}")
+        raise ArgumentTypeError(f"not a positive integer: {text}")
 
 
 not_whitespace = ''.join(set(string.printable) - set(string.whitespace))
@@ -27,7 +26,7 @@ letter_set_names = [
 sources = ', '.join(letter_set_names)
 
 app = Path(__file__)
-parser = argparse.ArgumentParser(
+parser = ArgumentParser(
     prog=app.name,
     description='Generate Random Characters',
 )
@@ -35,15 +34,23 @@ parser.add_argument('count', type=positive_int,
     help='how many random characters to generate')
 parser.add_argument('--sources', '-s', nargs='+', default=not_whitespace,
     help=f'candidate sources for letters; can either be any of {sources} or '
-         'some arbitrary characters. The default is the upper-case hex digits')
+         'some arbitrary characters; default printable except whitespace')
+autocomplete(parser)
 args = parser.parse_args()
+
+
+import secrets
+from sys import stdout, stderr, exit
 
 try:
     chars = ''.join(set(''.join(
         getattr(string, s, s)
         for s in args.sources
     )))
-    print(''.join(secrets.choice(chars) for _ in range(args.count)), end='')
+    print(
+        ''.join(secrets.choice(chars) for _ in range(args.count)),
+        end=None if stdout.isatty() else '',
+    )
 except IndexError as e:
     print(e, file=stderr)
     exit(1)
