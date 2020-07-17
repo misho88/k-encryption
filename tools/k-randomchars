@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+import argparse
+import string
+import secrets
+from pathlib import Path
+from sys import stderr, exit
+
+
+def positive_int(text):
+    try:
+        i = int(text)
+        if i <= 0:
+            raise ValueError('not positive')
+        return i
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a positive integer: {text}")
+
+
+not_whitespace = ''.join(set(string.printable) - set(string.whitespace))
+
+letter_set_names = [
+    attr
+    for attr, value in vars(string).items()
+    if not attr.startswith('_') and isinstance(value, str)
+]
+sources = ', '.join(letter_set_names)
+
+app = Path(__file__)
+parser = argparse.ArgumentParser(
+    prog=app.name,
+    description='Generate Random Characters',
+)
+parser.add_argument('count', type=positive_int,
+    help='how many random characters to generate')
+parser.add_argument('--sources', '-s', nargs='+', default=not_whitespace,
+    help=f'candidate sources for letters; can either be any of {sources} or '
+         'some arbitrary characters. The default is the upper-case hex digits')
+args = parser.parse_args()
+
+try:
+    chars = ''.join(set(''.join(
+        getattr(string, s, s)
+        for s in args.sources
+    )))
+    print(''.join(secrets.choice(chars) for _ in range(args.count)), end='')
+except IndexError as e:
+    print(e, file=stderr)
+    exit(1)
