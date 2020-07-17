@@ -1,11 +1,33 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from pathlib import Path
 from argcomplete import autocomplete
 
 prog = Path(__file__)
-parser = ArgumentParser(prog=prog.name, description='Decrypting Filter')
+epilog = f"""\
+{prog.name} reads Fernet-encrypted data on stdin, decrypts it, and writes it on
+stdout.
+
+Minimal Practical Example:
+$ KEY=`k-keygen __salt__`
+Password: # asdf
+$ echo $KEY
+WZ2LEFgT9On5y0K2WAjWa_v7hAoj1kQctgeeAyy6Lng=
+$ echo secret
+secret
+$ echo secret | k-encrypt $KEY && echo
+gAAAAABfEPnrCLN8rBQZdDCvynZn-PWQlvoaxqOfkVt1tvM60V0TUWyJIv6UQKTYsWjP5bPzJZNPEvEW6JUViFBZE1phqcZE6A==
+$ echo secret | k-encrypt $KEY | k-decrypt $KEY
+secret
+
+"""
+parser = ArgumentParser(
+    prog=prog.name,
+    description='Decrypting Filter',
+    epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
+)
 parser.add_argument('key', type=str.encode, help="decryption key")
 autocomplete(parser)
 args = parser.parse_args()
