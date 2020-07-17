@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from argcomplete import autocomplete
+from pathlib import Path
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='Key Generator')
+parser.add_argument('salt', type=str.encode,
+    help='the salt the key generator uses in conjunction with the password')
+parser.add_argument('--password', '-p',
+    help='the password (ideally, only to be used in scripts)')
+parser.add_argument('--confirm', '-c', action='store_true', default=False,
+    help='ask twice for the password')
+autocomplete(parser)
+args = parser.parse_args()
+
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # WTF?
+
+from base64 import urlsafe_b64encode
+from getpass import getpass
+
+from sys import stdin, stdout, stderr, exit
+
+
+if args.password is not None:
+    if stdin.isatty():
+        print(
+            f'{prog.name}: '
+            'WARNING: using --password/-p interactively is a bad idea; '
+            'chances are your password was just logged somewhere',
+            file=stderr,
+        )
+    password = args.password
+    if args.confirm:
+        print('--confirm/-c may not be passed together with --password/-p', file=stderr)
+        exit(1)
+else:
+    password = getpass()
+    if args.confirm:
+        confirmation = getpass('Confirm Password: ')
+        if password != confirmation:
+            print(f'{prog.name}: passwords do not match', file=stderr)
+            exit(1)
+
+# Fernet encruption requires length=32
+# iterations should be a large number and should *NEVER* change
+# I have no idea what backend does
+kdf = PBKDF2HMAC(
+    algorithm=SHA256(),
+    length=32,
+    salt=args.salt,
+    iterations=100000,
+    backend=default_backend()
+)
+
+raw_key = kdf.derive(password.encode())
+key = urlsafe_b64encode(raw_key)
+stdout.buffer.write(key)
