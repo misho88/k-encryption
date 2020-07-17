@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from pathlib import Path
+from argcomplete import autocomplete
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='Encrypting Filter')
+parser.add_argument('key', type=str.encode, help="encryption key")
+autocomplete(parser)
+args = parser.parse_args()
+
+from sys import stdin, stdout, stderr, exit
+from cryptography.fernet import Fernet
+
+try:
+    fernet = Fernet(args.key)
+except ValueError as e:
+    print(f'{prog.name}: {e}', file=stderr)
+    exit(1)
+data = stdin.buffer.read()
+encrypted = fernet.encrypt(data)
+stdout.buffer.write(encrypted)
