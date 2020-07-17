@@ -38,7 +38,7 @@ autocomplete(parser)
 args = parser.parse_args()
 
 from subprocess import run
-from sys import stdin, stderr, exit
+from sys import stdin, stdout, stderr, exit
 
 
 def die(result, error=None):
@@ -92,8 +92,6 @@ if args.command == 'list':
             print(f'{name} [{permstr(perms)}]')
         else:
             print(f'{name} ({keyuser.pw_name})')
-
-
 elif args.command == 'set':
     value = args.value if args.value is not None else stdin.read()
     if args.value is not None:
@@ -113,6 +111,8 @@ elif args.command == 'get':
         capture_output=True,
     ), error=f'no such key: {args.name}').stdout.decode().rstrip()
     die(run([ 'keyctl', 'pipe', key ]))
+    if stdout.isatty():
+        stdout.write('\n')
 elif args.command == 'del':
     key = die(run(
         [ 'keyctl', 'request', args.type, args.name, args.keyring ],
