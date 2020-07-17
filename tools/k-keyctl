@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from argcomplete import autocomplete
+from pathlib import Path
+
+USER_MAX_SIZE = 32767
+
+prog = Path(__file__)
+parser = ArgumentParser(
+    prog=prog.name,
+    description='less-flexible, easier-to-use keyctl frontend',
+)
+subparsers = parser.add_subparsers(
+    dest='command',
+    required=True,
+    help='command'
+)
+
+help_strings = {
+    'list': 'list keys',
+    'get': 'get the value of a key',
+    'set': 'assign a value to a key',
+    'del': 'delete a key and its value',
+    'mod': 'modify a key\'s properties (e.g., timeout, permissions)',
+}
+for cmd in 'list', 'get', 'set', 'del', 'mod':
+    subparser = subparsers.add_parser(cmd, help=help_strings[cmd])
+    if cmd != 'list':
+        subparser.add_argument('name', help='name (description) of key')
+    subparser.add_argument('--keyring', '-r', default='@s', help='keyring')
+    subparser.add_argument('--type', '-t', default='user', help='type')
+
+subparsers.choices['set'].add_argument('value', nargs='?',
+    help='value (default: read from stdin)')
+
+autocomplete(parser)
+args = parser.parse_args()
+
+from subprocess import run
+from sys import stdin, stderr, exit
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+        exit(result.returncode)
+    return result
+
+
+def permstr(perm):
+    if isinstance(perm, str):
+        if len(perm) > 8:
+            raise ValueError(f'invalid permission specification: {perm}')
+        perm = perm.rjust(8, '0')
+        return ','.join(permstr(int(perm[i:i + 2], 16)) for i in (0, 2, 4, 6))
+    if perm == 0x3f:
+        return 'full'
+    if perm == 0x00:
+        return 'none'
+    as_string = ''.join(permstr.translation[(1 << i) & perm] for i in range(7))
+    return permstr.long_name[as_string] if len(as_string) == 1 else as_string
+permstr.translation = {
+    0x00: '', 0x01: 'V', 0x02: 'R', 0x04: 'W', 0x08: 'S', 0x10: 'L', 0x20: 'A',
+}
+permstr.long_name = {
+    'V': 'view', 'R': 'read', 'W': 'write',
+    'S': 'search', 'L': 'link', 'A': 'set-attributes'
+}
+
+
+if args.command == 'list':
+    from getpass import getuser
+    from pwd import getpwuid, getpwnam
+    keys = die(run(
+        [ 'keyctl', 'rlist', args.keyring ],
+        capture_output=True,
+    )).stdout.decode()
+    for key in keys.split():
+        desc = die(run(
+            [ 'keyctl', 'rdescribe', key ],
+            capture_output=True,
+        )).stdout.decode()
+        type, uid, gid, perms, name = desc.rstrip().split(';')
+        if type != args.type:
+            continue
+        ownuser = getpwnam(getuser())
+        keyuser = getpwuid(int(uid))
+        if ownuser == keyuser:
+            print(f'{name} [{permstr(perms)}]')
+        else:
+            print(f'{name} ({keyuser.pw_name})')
+
+
+elif args.command == 'set':
+    value = args.value if args.value is not None else stdin.read()
+    if args.value is not None:
+        die(run(
+            [ 'keyctl', 'add', args.type, args.name, args.value, args.keyring ],
+            capture_output=True,
+        ))
+    else:
+        die(run(
+            [ 'keyctl', 'padd', args.type, args.name, args.keyring ],
+            input=stdin.read(),
+            capture_output=True,
+        ))
+elif args.command == 'get':
+    key = die(run(
+        [ 'keyctl', 'request', args.type, args.name, args.keyring ],
+        capture_output=True,
+    ), error=f'no such key: {args.name}').stdout.decode().rstrip()
+    die(run([ 'keyctl', 'pipe', key ]))
+elif args.command == 'del':
+    key = die(run(
+        [ 'keyctl', 'request', args.type, args.name, args.keyring ],
+        capture_output=True,
+    ), error=f'no such key: {args.name}').stdout.decode().rstrip()
+    die(run([ 'keyctl', 'revoke', key ]))
+    die(run([ 'keyctl', 'unlink', key ], capture_output=True))
+elif args.command == 'mod':
+    raise NotImplementedError(args.command)
+else:
+    raise NotImplementedError(args.command)
