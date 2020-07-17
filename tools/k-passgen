@@ -53,6 +53,7 @@ from string import ascii_uppercase, digits, punctuation
 import secrets
 import random
 from xkcdpass import xkcd_password as xp
+from sys import stdout
 
 # clean up the password-length limits
 if isinstance(args.min_length, float):
@@ -121,4 +122,4 @@ random.shuffle(tokens)
 tokens.append(suffix)
 
 # print the passphrase
-print(*tokens, sep=args.delimiter, end='')
+print(*tokens, sep=args.delimiter, end=None if stdout.isatty() else '')
