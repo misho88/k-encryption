@@ -10,6 +10,9 @@ parser.add_argument('salt', type=str.encode,
     help='the salt the key generator uses in conjunction with the password')
 parser.add_argument('--password', '-p',
     help='the password (ideally, only to be used in scripts)')
+parser.add_argument('--no-warning', action='store_true',
+    help='suppress the warning about passing a password on the command line '
+         'outside of a script')
 parser.add_argument('--confirm', '-c', action='store_true', default=False,
     help='ask twice for the password')
 autocomplete(parser)
@@ -27,7 +30,7 @@ from sys import stdin, stdout, stderr, exit
 
 
 if args.password is not None:
-    if stdin.isatty():
+    if stdin.isatty() and not args.no_warning:
         print(
             f'{prog.name}: '
             'WARNING: using --password/-p interactively is a bad idea; '
@@ -60,3 +63,5 @@ kdf = PBKDF2HMAC(
 raw_key = kdf.derive(password.encode())
 key = urlsafe_b64encode(raw_key)
 stdout.buffer.write(key)
+if stdout.isatty():
+    stdout.write('\n')
