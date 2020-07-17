@@ -42,7 +42,7 @@ together, we can initalize some store of this sort:
 $ k-randomchars 32 > salt  # save the salt somewhere
 $ KEY=$(k-keygen $(cat salt))  # generate the key, but don't save it
 Password: 
-$ echo '{}' | k-convert json msgpack | k-encrypt $KEY > vault  # itialize an empty vault
+$ echo '{}' | k-convert json msgpack | k-encrypt $KEY > vault  # initialize an empty vault
 ```
 
 We can then add something to it:
