@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from argcomplete import autocomplete
+from pathlib import Path
+
+formats = 'json', 'toml', 'yaml', 'msgpack', 'pickle'
+binary_formats = 'msgpack', 'pickle'
+
+prog = Path(__file__)
+epilog = """\
+""" f'{prog.name}' """ converts between JSON, TOML, YAML, MSGPACK and PICKLE
+
+Successful conversion largely depends on the data involved; the formats are
+not fully compatible. Errors are left uncaught so as to give the user maximal
+feedback when this happens.
+
+'pickle' and 'json' are usually packaged with Python. Support for the others
+would require the corresponding module to be installed.
+
+$ echo a.b.c=7
+a.b.c=7
+$ echo a.b.c=7 | k-convert toml toml
+[a.b]
+c = 7
+$ echo a.b.c=7 | k-convert toml json && echo
+{"a": {"b": {"c": 7}}}
+$ echo a.b.c=7 | k-convert toml yaml
+a:
+  b:
+    c: 7
+$ echo a.b.c=7 | k-convert toml msgpack && echo
+��a��b��c
+$ echo a.b.c=7 | k-convert toml msgpack | k-convert msgpack json && echo
+{"a": {"b": {"c": 7}}}
+
+"""
+parser = ArgumentParser(
+    prog=prog.name,
+    description='convert formatted text data between formats common',
+)
+parser.add_argument('input', choices=formats, help='input format')
+parser.add_argument('output', choices=formats, help='output format')
+autocomplete(parser)
+args = parser.parse_args()
+
+from importlib import import_module
+from sys import stdin, stdout
+
+load = import_module(args.input).load
+dump = import_module(args.output).dump
+
+if args.input in binary_formats:
+    stdin = stdin.buffer
+if args.output in binary_formats:
+    stdout = stdout.buffer
+
+dump(load(stdin), stdout)
