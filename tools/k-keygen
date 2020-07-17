@@ -5,7 +5,7 @@ from argcomplete import autocomplete
 from pathlib import Path
 
 prog = Path(__file__)
-parser = ArgumentParser(prog=prog.name, description='Key Generator')
+parser = ArgumentParser(prog=prog.name, description='Fernet-Compatible Key Generator')
 parser.add_argument('salt', type=str.encode,
     help='the salt the key generator uses in conjunction with the password')
 parser.add_argument('--password', '-p',
