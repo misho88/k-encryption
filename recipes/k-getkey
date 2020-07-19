@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from pathlib import Path
+from argcomplete import autocomplete
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='Fernet-Compatible Key Generator')
+parser.add_argument('--salt', '-s', type=str.encode,
+    help='the salt the key generator uses in conjunction with the password')
+parser.add_argument('--salt-name', '-n', default='salt',
+    help='the name of the salt file')
+parser.add_argument('--config-directory', '-c', type=Path,
+    help='configuration directory')
+parser.add_argument('--new', action='store_true',
+    help='make the key again even if it is already stored')
+parser.add_argument('name', nargs='?', default='k-encryption:default-key', help='name of the key')
+autocomplete(parser)
+args = parser.parse_args()
+
+from os import environ
+from sys import stdin, stdout, stderr, exit
+from subprocess import run
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+        exit(result.returncode)
+    return result
+
+
+timeout = environ.get('K_ENCRYPTION_KEY_TIMEOUT', '600')
+
+result = run([ 'k-keyctl', 'get', args.name ], capture_output=True)
+if result.returncode == 0:
+    die(run([ 'k-keyctl', 'mod', '--timeout', timeout, args.name ]))
+    stdout.buffer.write(result.stdout)
+else:
+    if args.salt is not None:
+        salt = args.salt
+    else:
+        if args.config_directory is not None:
+            dir = args.config_directory
+        else:
+            dir = Path(environ.get('K_ENCRYPTION_CONFIG_DIRECTORY', '~/.config/k-encryption'))
+        dir = dir.expanduser()
+        path = dir / args.salt_name
+        if not path.is_file():
+            print(f'not a file: {path} (use k-newsalt to generate)', file=stderr)
+        salt = path.read_bytes()
+
+    result = die(run([ 'k-keygen', salt ], capture_output=True))
+    die(run([ 'k-keyctl', 'set', '--timeout', timeout, args.name, result.stdout ]))
+    stdout.buffer.write(result.stdout)
+if stdout.isatty():
+    stdout.write('\n')
