@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from pathlib import Path
+from argcomplete import autocomplete
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='Generate a New Salt')
+parser.add_argument('name', nargs='?', default='salt', help='file name for the salt')
+parser.add_argument('--config-directory', '-c', type=Path,
+    help='configuration directory')
+parser.add_argument('--size', '-s', default='64', help='size of salt')
+autocomplete(parser)
+args = parser.parse_args()
+
+from os import environ
+from sys import stderr, exit
+from subprocess import run
+
+if args.config_directory is not None:
+    dir = args.config_directory
+else:
+    dir = Path(environ.get('K_ENCRYPTION_CONFIG_DIRECTORY', '~/.config/k-encryption'))
+dir = dir.expanduser()
+
+dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+mode = dir.stat().st_mode
+if mode & 0o077:
+    print(
+        f'WARNING: config directory is readable by others; fix with: chmod 700 {dir}',
+        file=stderr,
+    )
+
+path = dir / args.name
+if path.exists():
+    print(
+        f'file exists: {path}',
+        file=stderr,
+    )
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+        exit(result.returncode)
+    return result
+
+salt = die(run([ 'k-randomchars', args.size ], capture_output=True)).stdout
+(dir / args.name).write_bytes(salt)
