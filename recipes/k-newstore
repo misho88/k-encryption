@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from pathlib import Path
+from argcomplete import autocomplete
+
+prog = Path(__file__)
+epilog = """\
+"""
+parser = ArgumentParser(
+    prog=prog.name,
+    description='Manage Encrypted Key-Value Store',
+    #epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument('name', nargs='?', default='default',
+    help="the key")
+parser.add_argument('--data-directory', '-d', type=Path,
+    help='data directory')
+parser.add_argument('--format', '-f', default='msgpack',
+    help="the storage format (something k-convert will accept)")
+autocomplete(parser)
+args = parser.parse_args()
+
+from subprocess import run
+from sys import stdin, stdout, stderr, exit
+from os import environ
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+        exit(result.returncode)
+    return result
+
+
+if args.data_directory is not None:
+    dir = args.data_directory
+else:
+    dir = Path(environ.get('K_ENCRYPTION_DATA_DIRECTORY', '~/.local/share/k-encryption'))
+dir = dir.expanduser()
+dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+path = dir / args.name
+if path.exists():
+    print(f'file exists: {path}', file=stderr)
+    exit(1)
+
+key = die(run(
+    [ 'k-getkey', '--new', '--confirm' ],
+    capture_output=True,
+)).stdout
+
+data = die(run(
+    [ 'k-convert', 'json', args.format ],
+    input=b'{}',
+    capture_output=True,
+)).stdout
+
+encrypted = die(run(
+    [ 'k-encrypt', key ],
+    input=data,
+    capture_output=True,
+)).stdout
+
+path.write_bytes(encrypted)
