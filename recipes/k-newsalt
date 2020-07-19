@@ -37,6 +37,7 @@ if path.exists():
         f'file exists: {path}',
         file=stderr,
     )
+    exit(1)
 
 
 def die(result, error=None):
@@ -47,5 +48,6 @@ def die(result, error=None):
         exit(result.returncode)
     return result
 
+
 salt = die(run([ 'k-randomchars', args.size ], capture_output=True)).stdout
-(dir / args.name).write_bytes(salt)
+path.write_bytes(salt)
