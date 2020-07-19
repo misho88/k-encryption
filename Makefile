@@ -1,9 +1,17 @@
-LOCATION=/usr/local/bin
+TOOLS_LOCATION=/usr/local/bin
+RECIPES_LOCATION=/usr/local/bin
 
 TOOLS=$(wildcard tools/*)
-DESTINATIONS=$(subst tools,$(LOCATION),$(TOOLS))
+RECIPES=$(wildcard recipes/*)
+TOOLS_DESTINATIONS=$(subst tools,$(TOOLS_LOCATION),$(TOOLS))
+RECIPES_DESTINATIONS=$(subst recipes,$(RECIPES_LOCATION),$(RECIPES))
 
-$(LOCATION)/%: tools/%
+DESTINATIONS=$(TOOLS_DESTINATIONS) $(RECIPES_DESTINATIONS)
+
+$(TOOLS_LOCATION)/%: tools/%
+	install $< $@
+
+$(RECIPES_LOCATION)/%: recipes/%
 	install $< $@
 
 uninstall:
