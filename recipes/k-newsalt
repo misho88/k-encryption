@@ -33,10 +33,7 @@ if mode & 0o077:
 
 path = dir / args.name
 if path.exists():
-    print(
-        f'file exists: {path}',
-        file=stderr,
-    )
+    print(f'file exists: {path}', file=stderr)
     exit(1)
 
 
