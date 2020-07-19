@@ -24,15 +24,28 @@ help_strings = {
     'del': 'delete a key and its value',
     'mod': 'modify a key\'s properties (e.g., timeout, permissions)',
 }
-for cmd in 'list', 'get', 'set', 'del', 'mod':
-    subparser = subparsers.add_parser(cmd, help=help_strings[cmd])
-    if cmd != 'list':
-        subparser.add_argument('name', help='name (description) of key')
-    subparser.add_argument('--keyring', '-r', default='@s', help='keyring')
-    subparser.add_argument('--type', '-t', default='user', help='type')
 
-subparsers.choices['set'].add_argument('value', nargs='?',
-    help='value (default: read from stdin)')
+for cmd, help_string in help_strings.items():
+    subparsers.add_parser(cmd, help=help_string)
+
+for cmd in 'list', 'get', 'set', 'del', 'mod':
+    subparser = subparsers.choices[cmd]
+    subparser.add_argument('--keyring', '-r', default='@s', help='keyring')
+    subparser.add_argument('--type', '-T', default='user', help='type')
+
+for cmd in 'get', 'set', 'del', 'mod':
+    subparser = subparsers.choices[cmd]
+    subparser.add_argument('name', help='name (description) of key')
+
+for cmd in 'set', 'mod':
+    subparser = subparsers.choices[cmd]
+    subparser.add_argument('--timeout', '-t',
+        help='how long the key should last, in seconds (default: none)')
+
+for cmd in 'set', :
+    subparser = subparsers.choices[cmd]
+    subparser.add_argument('value', nargs='?', help='value (omit to use stdin)')
+
 
 autocomplete(parser)
 args = parser.parse_args()
@@ -79,10 +92,14 @@ if args.command == 'list':
         capture_output=True,
     )).stdout.decode()
     for key in keys.split():
-        desc = die(run(
+        result = run(
             [ 'keyctl', 'rdescribe', key ],
             capture_output=True,
-        )).stdout.decode()
+        )
+        if result.returncode:
+            continue
+        else:
+            desc = result.stdout.decode()
         type, uid, gid, perms, name = desc.rstrip().split(';')
         if type != args.type:
             continue
@@ -95,16 +112,19 @@ if args.command == 'list':
 elif args.command == 'set':
     value = args.value if args.value is not None else stdin.read()
     if args.value is not None:
-        die(run(
+        result = die(run(
             [ 'keyctl', 'add', args.type, args.name, args.value, args.keyring ],
             capture_output=True,
         ))
     else:
-        die(run(
+        result = die(run(
             [ 'keyctl', 'padd', args.type, args.name, args.keyring ],
             input=stdin.read(),
             capture_output=True,
         ))
+    if args.timeout is not None:
+        key = result.stdout.rstrip()
+        die(run([ 'keyctl', 'timeout', key, args.timeout ]))
 elif args.command == 'get':
     key = die(run(
         [ 'keyctl', 'request', args.type, args.name, args.keyring ],
@@ -121,6 +141,11 @@ elif args.command == 'del':
     die(run([ 'keyctl', 'revoke', key ]))
     die(run([ 'keyctl', 'unlink', key ], capture_output=True))
 elif args.command == 'mod':
-    raise NotImplementedError(args.command)
+    key = die(run(
+        [ 'keyctl', 'request', args.type, args.name, args.keyring ],
+        capture_output=True,
+    ), error=f'no such key: {args.name}').stdout.decode().rstrip()
+    if args.timeout is not None:
+        die(run([ 'keyctl', 'timeout', key, args.timeout ]))
 else:
     raise NotImplementedError(args.command)
