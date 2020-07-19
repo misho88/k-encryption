@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from pathlib import Path
+from argcomplete import autocomplete
+
+prog = Path(__file__)
+epilog = """\
+"""
+parser = ArgumentParser(
+    prog=prog.name,
+    description='Manage Encrypted Key-Value Store',
+    #epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument('action', help="what to do")
+parser.add_argument('--name', '-n', default='default',
+    help="name of the store (default: default)")
+parser.add_argument('--data-directory', '-d', type=Path,
+    help='data directory')
+parser.add_argument('--storage-format', '-F', default='msgpack',
+    help="the format of the store")
+parser.add_argument('--action-format', '-f', default='toml',
+    help="the format to edit in")
+parser.add_argument('--read-only', '-r', action='store_true',
+    help='do not try to write data back to the store (by default: only '
+         'write back if the data has changed')
+parser.add_argument('--print-result', '-p', action='store_true',
+    help='whether to print the result (if the action is some filter or list, '
+         'this is a good idea)')
+autocomplete(parser)
+args = parser.parse_args()
+
+from subprocess import run
+from sys import stdout, stderr, exit
+from os import environ
+from tempfile import NamedTemporaryFile
+from shutil import copy
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+        exit(result.returncode)
+    return result
+
+
+if args.data_directory is not None:
+    dir = args.data_directory
+else:
+    dir = Path(environ.get('K_ENCRYPTION_DATA_DIRECTORY', '~/.local/share/k-encryption'))
+dir = dir.expanduser()
+path = dir / args.name
+
+encrypted = path.read_bytes()
+key = die(run([ 'k-getkey' ], capture_output=True)).stdout
+
+data = die(run(
+    [ 'k-decrypt', key ],
+    input=encrypted,
+    capture_output=True,
+)).stdout
+formatted = die(run(
+    [ 'k-convert', args.storage_format, args.action_format ],
+    input=data,
+    capture_output=True,
+)).stdout
+
+transformed = formatted
+while True:
+    transformed = die(run(
+        args.action,
+        shell=True,
+        input=transformed,
+        capture_output=True,
+    )).stdout
+
+    no_write = args.read_only or formatted == transformed
+    if no_write:
+        break
+
+    result = run(
+        [ 'k-convert', args.action_format, args.storage_format ],
+        input=transformed,
+        capture_output=True,
+    )
+    if result.returncode:
+        try:
+            print(
+                'failed to convert edited data:',
+                result.stderr.decode(),
+                sep='\n\n',
+                file=stderr,
+            )
+            input('Press ENTER to try again, CTRL+C to cancel.')
+            print("trying again...", file=stderr)
+        except KeyboardInterrupt:
+            break
+    else:
+        data = result.stdout
+        break
+
+if args.print_result:
+    stdout.buffer.write(transformed)
+    if stdout.isatty() and not transformed.endswith(b'\n'):
+        stdout.write('\n')
+
+if no_write:
+    exit(0)
+
+encrypted = die(run(
+    [ 'k-encrypt', key ],
+    input=data,
+    capture_output=True,
+)).stdout
+
+with NamedTemporaryFile() as tmpfile:
+    tmpfile.write(encrypted)
+    tmpfile.flush()
+    copy(tmpfile.name, path)
