@@ -104,12 +104,18 @@ is probably not necessary.
 ### Python Modules
 
 `cryptography` for k-encrypt, k-decrypt, k-keygen
+
 `toml` for TOML support in k-convert, k-filter, k-list
+
 `yaml` for YAML support in k-convert, k-filter, k-list
+
 `msgpack` for MSGPACK support in k-convert, k-filter
+
 `xkcdpass` for `k-passgen`
 
 ### External Utilities
 `moreutils` for `vipe`, which is probably the only easy way to edit data with k-do
+
 `keyutils` for `keyctl`, needed by `k-keyctl` to temporarily store keys
+
 `jq` is like `k-filter` and `k-list` that only supports JSON, but is far more powerful
