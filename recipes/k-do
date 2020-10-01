@@ -5,12 +5,9 @@ from pathlib import Path
 from argcomplete import autocomplete
 
 prog = Path(__file__)
-epilog = """\
-"""
 parser = ArgumentParser(
     prog=prog.name,
     description='Manage Encrypted Key-Value Store',
-    #epilog=epilog,
     formatter_class=RawDescriptionHelpFormatter,
 )
 parser.add_argument('action', help="what to do")
@@ -43,8 +40,13 @@ def die(result, error=None):
         error = result.stderr if error is None else f'{error}\n'.encode()
         if error is not None:
             stderr.buffer.write(error)
+            stderr.buffer.flush()
         exit(result.returncode)
     return result
+
+
+def sys(*args, capture_output=True, **kwargs):
+    return run(*args, capture_output=capture_output, **kwargs)
 
 
 if args.data_directory is not None:
@@ -55,37 +57,32 @@ dir = dir.expanduser()
 path = dir / args.name
 
 encrypted = path.read_bytes()
-key = die(run([ 'k-getkey' ], capture_output=True)).stdout
 
-data = die(run(
-    [ 'k-decrypt', key ],
-    input=encrypted,
-    capture_output=True,
-)).stdout
-formatted = die(run(
-    [ 'k-convert', args.storage_format, args.action_format ],
-    input=data,
-    capture_output=True,
-)).stdout
+key = die(sys([ 'k-getkey' ])).stdout
+
+while True:
+    result = sys([ 'k-decrypt', key ], input=encrypted)
+    if result.returncode == 0:
+        data = result.stdout
+        break
+    if result.returncode != 4:
+        die(result)
+    stderr.buffer.write(result.stderr)
+    stderr.buffer.flush()
+    key = die(sys([ 'k-getkey', '--new' ])).stdout
+
+
+formatted = die(sys([ 'k-convert', args.storage_format, args.action_format ], input=data)).stdout
 
 transformed = formatted
 while True:
-    transformed = die(run(
-        args.action,
-        shell=True,
-        input=transformed,
-        capture_output=True,
-    )).stdout
+    transformed = die(sys(args.action, shell=True, input=transformed)).stdout
 
     no_write = args.read_only or formatted == transformed
     if no_write:
         break
 
-    result = run(
-        [ 'k-convert', args.action_format, args.storage_format ],
-        input=transformed,
-        capture_output=True,
-    )
+    result = sys([ 'k-convert', args.action_format, args.storage_format ], input=transformed)
     if result.returncode:
         try:
             print(
@@ -110,11 +107,7 @@ if args.print_result:
 if no_write:
     exit(0)
 
-encrypted = die(run(
-    [ 'k-encrypt', key ],
-    input=data,
-    capture_output=True,
-)).stdout
+encrypted = die(sys([ 'k-encrypt', key ], input=data)).stdout
 
 with NamedTemporaryFile() as tmpfile:
     tmpfile.write(encrypted)
