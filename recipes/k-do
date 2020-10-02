@@ -30,7 +30,6 @@ parser.add_argument('--shell', '-s', action='store_true',
 autocomplete(parser)
 args = parser.parse_args()
 
-
 from subprocess import run
 from sys import stdout, stderr, exit
 from os import environ
