@@ -10,7 +10,7 @@ parser = ArgumentParser(
     description='Manage Encrypted Key-Value Store',
     formatter_class=RawDescriptionHelpFormatter,
 )
-parser.add_argument('action', help="what to do")
+parser.add_argument('action', nargs='*', help="what to do")
 parser.add_argument('--name', '-n', default='default',
     help="name of the store (default: default)")
 parser.add_argument('--data-directory', '-d', type=Path,
@@ -25,14 +25,25 @@ parser.add_argument('--read-only', '-r', action='store_true',
 parser.add_argument('--print-result', '-p', action='store_true',
     help='whether to print the result (if the action is some filter or list, '
          'this is a good idea)')
+parser.add_argument('--shell', '-s', action='store_true',
+    help='run the action in a shell (so things like piping work)')
 autocomplete(parser)
 args = parser.parse_args()
+
 
 from subprocess import run
 from sys import stdout, stderr, exit
 from os import environ
 from tempfile import NamedTemporaryFile
 from shutil import copy
+
+
+if args.shell and len(args.action) > 1:
+    print(
+        "action must be single argument when --shell is passed (put it in quotes?)",
+        file=stderr,
+    )
+    exit(1)
 
 
 def die(result, error=None):
@@ -76,7 +87,14 @@ formatted = die(sys([ 'k-convert', args.storage_format, args.action_format ], in
 
 transformed = formatted
 while True:
-    transformed = die(sys(args.action, shell=True, input=transformed)).stdout
+    if args.action:
+        if args.shell:
+            transformed = die(sys(args.action[0], shell=True, input=transformed)).stdout
+        else:
+            transformed = die(sys(args.action, input=transformed)).stdout
+    else:
+        no_write = True
+        break
 
     no_write = args.read_only or formatted == transformed
     if no_write:
