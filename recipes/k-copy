@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from pathlib import Path
+from argcomplete import autocomplete
+
+prog = Path(__file__)
+parser = ArgumentParser(
+    prog=prog.name,
+    description='interactively select a key and print the value',
+)
+parser.add_argument('clipboard', nargs='*', default=['primary'],
+    help="which clipboard to use (primary/secondary/clipboard or a custom command)")
+
+autocomplete(parser)
+args = parser.parse_args()
+
+from subprocess import run, CalledProcessError
+from sys import stderr, exit
+from psutil import process_iter
+from getpass import getuser
+from pwd import getpwnam
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+            stderr.buffer.flush()
+        exit(result.returncode)
+    return result
+
+
+def sys(*args, capture_output=True, **kwargs):
+    return run(*args, capture_output=capture_output, **kwargs)
+
+# check if clipmenud is running for this user
+uid = getpwnam(getuser()).pw_uid
+clipmenud = any(
+    proc.uids().effective == uid and (proc.name() == 'clipmenud' or (
+        proc.name() == 'bash' and len(cmd := proc.cmdline()) >= 2 and 'clipmenud' in cmd[1]
+    ))
+    for proc in process_iter()
+)
+
+if len(args.clipboard) == 1 and args.clipboard[0] in ('primary', 'secondary', 'clipboard'):
+    clipboard = args.clipboard[0]
+    clip_cmdline = [ 'xclip', '-in', '-selection', args.clipboard[0] ]
+else:
+    clipboard = None
+    clip_cmdline = args.clipboard
+
+message = {
+    'primary': [ '--message', 'middle click to paste' ],
+    'clipboard': [ '--message', 'CTRL+V to paste' ],
+    None: [],
+}[clipboard]
+
+
+if clipmenud:
+    die(sys([ 'clipctl', 'disable' ]))
+
+try:
+    selection = sys([ 'k-read', '--', 'k-select', 'toml' ] + message, check=True).stdout
+    run(clip_cmdline, check=True, input=selection)
+except CalledProcessError as e:
+    print(e, file=stderr)
+    print(e.stderr, file=stderr)
+finally:
+    if clipmenud:
+        die(sys([ 'clipctl', 'enable' ]))
