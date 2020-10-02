@@ -16,6 +16,10 @@ parser = ArgumentParser(
 parser.add_argument('format', choices=formats, help='data format')
 parser.add_argument('--menu', '-m', default='auto',
     help="menu application to use (default: rofi or dmenu)")
+parser.add_argument('--prompt', '-p', default='Key: ',
+    help="prompt text")
+parser.add_argument('--message', '-s',
+    help="extra message")
 
 autocomplete(parser)
 args = parser.parse_args()
@@ -45,7 +49,14 @@ if args.menu == 'auto':
             break
 
 if args.menu == 'rofi':
-    cmdline = [ 'rofi', '-dmenu', '-only-match' ]
+    if args.prompt.rstrip().endswith(':'):
+        args.prompt = args.prompt.rstrip()[:-1]
+    cmdline = [
+        'rofi', '-dmenu', '-no-custom',
+        '-p', args.prompt
+    ]
+    if args.message is not None:
+        cmdline += [ '-mesg', args.message ]
 elif args.menu == 'dmenu':
     cmdline = [ 'dmenu' ]
 else:
@@ -54,7 +65,7 @@ else:
 
 pairs = die(sys([ 'k-split-values', args.format ], input=stdin.buffer.read()))
 
-key = die(sys([ 'rofi', '-dmenu' ], input=pairs.stdout)).stdout.rstrip()
+key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 
 value = next(v for k, v in zip(
     pairs.stdout.splitlines(keepends=False),
