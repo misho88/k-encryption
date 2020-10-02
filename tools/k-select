@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from pathlib import Path
+from argcomplete import autocomplete
+
+formats = 'json', 'toml', 'yaml', 'msgpack', 'pickle'
+binary_formats = 'msgpack', 'pickle'
+
+prog = Path(__file__)
+parser = ArgumentParser(
+    prog=prog.name,
+    description='interactively select a key and print the value',
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument('format', choices=formats, help='data format')
+parser.add_argument('--menu', '-m', default='auto',
+    help="menu application to use (default: rofi or dmenu)")
+
+autocomplete(parser)
+args = parser.parse_args()
+
+from subprocess import run
+from sys import stdin, stdout, stderr, exit
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+            stderr.buffer.flush()
+        exit(result.returncode)
+    return result
+
+
+def sys(*args, capture_output=True, **kwargs):
+    return run(*args, capture_output=capture_output, **kwargs)
+
+
+if args.menu == 'auto':
+    for cmd in ('rofi', 'dmenu'):
+        if sys([ 'which', cmd ]).returncode == 0:
+            args.menu = cmd
+            break
+
+if args.menu == 'rofi':
+    cmdline = [ 'rofi', '-dmenu', '-only-match' ]
+elif args.menu == 'dmenu':
+    cmdline = [ 'dmenu' ]
+else:
+    from shlex import split
+    cmdline = split(args.menu)
+
+pairs = die(sys([ 'k-split-values', args.format ], input=stdin.buffer.read()))
+
+key = die(sys([ 'rofi', '-dmenu' ], input=pairs.stdout)).stdout.rstrip()
+
+value = next(v for k, v in zip(
+    pairs.stdout.splitlines(keepends=False),
+    pairs.stderr.splitlines(keepends=False),
+) if k == key)
+
+stdout.buffer.write(value)
+if stdout.isatty():
+    stdout.write('\n')
