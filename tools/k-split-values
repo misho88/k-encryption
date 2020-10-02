@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argcomplete import autocomplete
+from pathlib import Path
+
+formats = 'json', 'toml', 'yaml', 'msgpack', 'pickle'
+binary_formats = 'msgpack', 'pickle'
+
+prog = Path(__file__)
+epilog = """\
+""" f'{prog.name}' """ lists values from hierarchical key store to stdout
+and their corresponding keys on stderr:
+
+$ echo '{ "domain": { "user": "name", "pass": "s3cr3t" } }' \
+    | k-split-values json 1> keys.tmp \
+                          2> values.tmp
+$ cat keys.tmp
+domain.user
+domain.pass
+$ cat values.tmp
+name
+s3cr3t
+"""
+parser = ArgumentParser(
+    prog=prog.name,
+    description='split keys from values in a hierarchical key store',
+    epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument('format', choices=formats, help='data format')
+autocomplete(parser)
+args = parser.parse_args()
+
+from sys import stdin, stdout, stderr
+from importlib import import_module
+from string import whitespace, printable
+
+sep = '.'
+
+
+def not_printable(s: str) -> bool:
+    return any(c in whitespace or c not in printable for c in s)
+
+
+def rprint(data, prefix=''):
+    if not isinstance(data, dict):
+        print(prefix, file=stdout)
+        print(data, file=stderr)
+    else:
+        for key, val in data.items():
+            if sep in key or not_printable(key):
+                key = repr(key)
+            rprint(val, f'{prefix}{sep}{key}' if prefix else key)
+
+
+if args.format in binary_formats:
+    stdin = stdin.buffer
+load = import_module(args.format).load
+data = load(stdin)
+rprint(data)
