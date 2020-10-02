@@ -28,6 +28,22 @@ from getpass import getpass
 
 from sys import stdin, stdout, stderr, exit
 
+from subprocess import run
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+            stderr.buffer.flush()
+        exit(result.returncode)
+    return result
+
+
+def sys(*args, capture_output=True, **kwargs):
+    return run(*args, capture_output=capture_output, **kwargs)
+
 
 if args.password is not None:
     if stdin.isatty() and not args.no_warning:
@@ -42,9 +58,10 @@ if args.password is not None:
         print('--confirm/-c may not be passed together with --password/-p', file=stderr)
         exit(1)
 else:
-    password = getpass()
+    prompt_type = 'tty' if stdin.isatty() else 'not-tty'
+    password = die(sys([ 'k-passprompt', '--type', prompt_type ])).stdout
     if args.confirm:
-        confirmation = getpass('Confirm Password: ')
+        confirmation = die(sys([ 'k-passprompt', '--type', prompt_type, 'Confirm Password:' ])).stdout
         if password != confirmation:
             print(f'{prog.name}: passwords do not match', file=stderr)
             exit(1)
@@ -60,7 +77,7 @@ kdf = PBKDF2HMAC(
     backend=default_backend()
 )
 
-raw_key = kdf.derive(password.encode())
+raw_key = kdf.derive(password)
 key = urlsafe_b64encode(raw_key)
 stdout.buffer.write(key)
 if stdout.isatty():
