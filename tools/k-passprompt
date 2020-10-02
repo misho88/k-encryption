@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from argcomplete import autocomplete
+from pathlib import Path
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='ask for a password with a prompt')
+parser.add_argument('prompt', default='Password: ', nargs='?',
+    help='what to display at the prompt')
+parser.add_argument('--type', '-t', choices=('auto', 'not-tty', 'tty', 'tk', 'zenity', 'rofi', 'dmenu'), default='auto',
+    help='force a specific kind of dialog')
+autocomplete(parser)
+args = parser.parse_args()
+
+from sys import exit, stdin, stdout, stderr
+from subprocess import run
+
+
+def die(result, error=None):
+    if result.returncode:
+        error = result.stderr if error is None else f'{error}\n'.encode()
+        if error is not None:
+            stderr.buffer.write(error)
+            stderr.buffer.flush()
+        exit(result.returncode)
+    return result
+
+
+def sys(*args, capture_output=True, **kwargs):
+    return run(*args, capture_output=capture_output, **kwargs)
+
+
+if args.type == 'auto':
+    args.type = 'tty' if stdin.isatty() else 'not-tty'
+
+if args.type == 'not-tty':
+    for cmd in ('rofi', 'zenity', 'dmenu'):
+        if sys([ 'which', cmd ]).returncode == 0:
+            args.type = cmd
+            break
+    else:
+        args.type = 'tk'
+
+if args.type == 'tty':
+    from getpass import getpass
+    password = getpass(args.prompt).encode()
+elif args.type == 'rofi':
+    if args.prompt.rstrip().endswith(':'):
+        args.prompt = args.prompt.rstrip()[:-1]
+    result = die(sys([ 'rofi', '-dmenu', '-password', '-p', args.prompt ], input=b''))
+    password = result.stdout.rstrip(b'\n')
+elif args.type == 'dmenu':
+    result = die(sys([ 'dmenu', '-sb', 'black', '-nb', 'red', '-nf', 'red', '-p', args.prompt ], input=b''))
+    password = result.stdout.rstrip(b'\n')
+elif args.type == 'zenity':
+    result = die(sys([ 'zenity', '--password', '--title', args.prompt ]))
+    password = result.stdout.rstrip(b'\n')
+elif args.type == 'tk':
+    from tkinter import Tk
+    from tkinter.simpledialog import askstring
+
+    tk = Tk()
+    tk.withdraw()
+    password = askstring(args.prompt, "Password:", show='*').encode()
+
+stdout.buffer.write(password)
+if stdout.isatty():
+    stdout.write('\n')
