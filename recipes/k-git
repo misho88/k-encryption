@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+DIR=${K_ENCRYPTION_DATA_DIRECTORY:-"${HOME}/.local/share/k-encryption"}
+cd $DIR
+git "$@"

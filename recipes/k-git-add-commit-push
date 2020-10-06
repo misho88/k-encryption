@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+DIR=${K_ENCRYPTION_DATA_DIRECTORY:-"${HOME}/.local/share/k-encryption"}
+VAULT=${1:-default}
+
+cd $DIR
+git add "${VAULT}"
+git commit -m $(date -I)
+git push origin master
