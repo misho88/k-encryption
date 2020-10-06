@@ -15,8 +15,8 @@ parser.add_argument('clipboard', nargs='*', default=['primary'],
 autocomplete(parser)
 args = parser.parse_args()
 
-from subprocess import run, CalledProcessError
-from sys import stderr, exit
+from subprocess import run, CalledProcessError, PIPE
+from sys import stdout, stderr, exit
 from psutil import process_iter
 from getpass import getuser
 from pwd import getpwnam
@@ -34,6 +34,7 @@ def die(result, error=None):
 
 def sys(*args, capture_output=True, **kwargs):
     return run(*args, capture_output=capture_output, **kwargs)
+
 
 # check if clipmenud is running for this user
 uid = getpwnam(getuser()).pw_uid
@@ -57,16 +58,22 @@ message = {
     None: [],
 }[clipboard]
 
+data = die(sys([ 'k-read' ])).stdout
 
 if clipmenud:
     die(sys([ 'clipctl', 'disable' ]))
 
 try:
-    selection = sys([ 'k-read', '--', 'k-select', 'toml' ] + message, check=True).stdout
+    menu = 'all' if stdout.isatty() else 'gui'
+    selection = run(
+        [ 'k-select', 'toml', '--menu', menu ] + message,
+        stdout=PIPE,
+        input=data,
+        check=True,
+    ).stdout
     run(clip_cmdline, check=True, input=selection)
 except CalledProcessError as e:
     print(e, file=stderr)
-    print(e.stderr, file=stderr)
 finally:
     if clipmenud:
         die(sys([ 'clipctl', 'enable' ]))
