@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, Action, ArgumentError
+from argcomplete import autocomplete
+from pathlib import Path
+
+formats = 'json', 'toml', 'yaml', 'msgpack', 'pickle'
+binary_formats = 'msgpack', 'pickle'
+
+
+class ExclusiveStoreTrue(Action):
+    instance_count = 0
+
+    def __init__(self, option_strings, dest, nargs=0, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if ExclusiveStoreTrue.instance_count:
+            msg = 'only one type of matching can be specified'
+            raise ArgumentError(None, msg)
+        ExclusiveStoreTrue.instance_count += 1
+        setattr(namespace, self.dest, True)
+
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='filter a key-value store')
+parser.add_argument('format', choices=formats, help='data format')
+parser.add_argument('patterns', nargs='*',
+    help='how far into the hierarchy to descend (default -1 means all the way)')
+parser.add_argument('--fuzzy', '-f', action=ExclusiveStoreTrue, default=False,
+    help='use fuzzy matching')
+parser.add_argument('--exact', '-e', action=ExclusiveStoreTrue, default=False,
+    help='use exact matching (either the key matches exablank means "any")')
+parser.add_argument('--glob', '-g', action=ExclusiveStoreTrue, default=False,
+    help='use glob (fnmatch) matching')
+parser.add_argument('--regex', '-r', action=ExclusiveStoreTrue, default=False,
+    help='use regex matching')
+autocomplete(parser)
+args = parser.parse_args()
+
+if not any((args.glob, args.regex, args.exact, args.fuzzy)):
+    args.glob = True
+
+from sys import stdin, stdout
+from importlib import import_module
+from functools import partial
+
+
+def simple_filter(match, data, depth=0):
+    if not isinstance(data, dict) or depth >= len(args.patterns):
+        return data
+    return {
+        key: simple_filter(match, value, depth + 1)
+        for key, value in data.items()
+        if match(key, data.keys(), args.patterns[depth])
+    }
+
+
+if args.exact:
+    def match(key, keys, pattern):
+        return not pattern or key == pattern
+    filter = partial(simple_filter, match)
+elif args.glob:
+    def match(key, keys, pattern):
+        from fnmatch import fnmatch
+        return fnmatch(key, pattern)
+    filter = partial(simple_filter, match)
+elif args.regex:
+    def match(key, keys, pattern):
+        from re import match
+        return match(pattern, key) is not None
+    filter = partial(simple_filter, match)
+elif args.fuzzy:
+    def fuzzy_filter(data, depth=0):
+        from fuzzywuzzy.process import extractBests
+        if not isinstance(data, dict) or depth >= len(args.patterns):
+            return data
+        if not args.patterns[depth]:
+            return { k: fuzzy_filter(v, depth + 1) for k, v in data.items() }
+        matches = extractBests(
+            args.patterns[depth],
+            data.keys(),
+            limit=len(data),
+            score_cutoff=70,
+        )
+        return { k: fuzzy_filter(data[k], depth + 1) for k, score in matches }
+    filter = fuzzy_filter
+else:
+    raise RuntimeError('argument parsing is broken somehow')
+
+if args.format in binary_formats:
+    stdin = stdin.buffer
+    stdout = stdout.buffer
+module = import_module(args.format)
+data = module.load(stdin)
+filtered = filter(data)
+module.dump(filtered, stdout)

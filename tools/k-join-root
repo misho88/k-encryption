@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argcomplete import autocomplete
+from pathlib import Path
+
+formats = 'json', 'toml', 'yaml', 'msgpack', 'pickle'
+binary_formats = 'msgpack', 'pickle'
+
+epilog = """\
+After filtering, it is possible to be left with single-child nodes at the
+start of a tree. This splits those nodes off and prints them to stderr in
+a command-line-argument-friendly format. The rest of the tree is printed to
+stdout.
+
+Clarifying example:
+The single-child root of the tree is printed to stderr:
+$ echo '{"a": {"b": {"c": 1, "d": 2}}}' | tools/k-split-root json > /dev/null
+a b
+
+The rest of the tree to stdout:
+$ echo '{"a": {"b": {"c": 1, "d": 2}}}' | tools/k-split-root json 2> /dev/null
+{"c": 1, "d": 2}
+"""
+
+prog = Path(__file__)
+parser = ArgumentParser(
+    prog=prog.name,
+    description='split off the root of a tree hierarchy',
+    epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument('format', choices=formats, help='data format')
+autocomplete(parser)
+args = parser.parse_args()
+
+from importlib import import_module
+from sys import stdin, stdout, stderr
+from string import whitespace, printable
+
+
+def not_printable(s: str) -> bool:
+    return any(c in whitespace or c not in printable for c in s)
+
+
+module = import_module(args.format)
+data = module.load(stdin.buffer if args.format in binary_formats else stdin)
+root = []
+while isinstance(data, dict) and len(data) == 1:
+    key, data = next(iter(data.items()))
+    root.append(key)
+
+
+stderr.write(' '.join(
+    repr(key) if not isinstance(key, str) or not_printable(key) else key
+    for key in root
+))
+
+module.dump(data, stdout.buffer if args.format in binary_formats else stdout)
+
+if stdout.isatty():
+    stdout.write('\n')
+elif stderr.isatty():
+    stderr.write('\n')

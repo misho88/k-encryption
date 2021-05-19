@@ -24,7 +24,7 @@ parser.add_argument('--message', '-s',
 autocomplete(parser)
 args = parser.parse_args()
 
-from subprocess import run
+from subprocess import run, PIPE
 from sys import stdin, stdout, stderr, exit
 
 
@@ -42,11 +42,26 @@ def sys(*args, capture_output=True, **kwargs):
     return run(*args, capture_output=capture_output, **kwargs)
 
 
+candidate_menu = { 'tty': ('fzf', 'pmenu'), 'gui': ('rofi', 'dmenu') }
+candidate_menu['all'] = candidate_menu['tty'] + candidate_menu['gui']
+
 if args.menu == 'auto':
-    for cmd in ('rofi', 'dmenu'):
+    args.menu = 'all' if stdout.isatty() else 'gui'
+
+if args.menu in candidate_menu.keys():
+    for cmd in candidate_menu[args.menu]:
         if sys([ 'which', cmd ]).returncode == 0:
             args.menu = cmd
             break
+    else:
+        print(
+            'could not find a suitable menu; either specify --menu/-m or '
+            'install one of {", ".join(candidate_menu)}',
+            file=stderr
+        )
+        exit(1)
+
+pairs = die(sys([ 'k-split-values', args.format ], input=stdin.buffer.read()))
 
 if args.menu == 'rofi':
     if args.prompt.rstrip().endswith(':'):
@@ -57,15 +72,18 @@ if args.menu == 'rofi':
     ]
     if args.message is not None:
         cmdline += [ '-mesg', args.message ]
+    key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'dmenu':
     cmdline = [ 'dmenu' ]
+    key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
+elif args.menu == 'fzf':
+    cmdline = [ 'fzf' ]  # needs stderr to be free
+    key = die(run(cmdline, stdout=PIPE, input=pairs.stdout), 'fzf failed').stdout.rstrip()
 else:
     from shlex import split
     cmdline = split(args.menu)
+    key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 
-pairs = die(sys([ 'k-split-values', args.format ], input=stdin.buffer.read()))
-
-key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 
 value = next(v for k, v in zip(
     pairs.stdout.splitlines(keepends=False),

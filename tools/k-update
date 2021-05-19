@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from argcomplete import autocomplete
+from pathlib import Path
+
+formats = 'json', 'toml', 'yaml', 'msgpack'
+binary_formats = 'msgpack',
+
+prog = Path(__file__)
+parser = ArgumentParser(prog=prog.name, description='update an encoded file with new data')
+parser.add_argument('format', choices=formats, help='data format')
+parser.add_argument('new', nargs='+', help='the new data')
+parser.add_argument('--at', '-a', nargs='*', default=[], help='the new data')
+autocomplete(parser)
+args = parser.parse_args()
+
+from sys import stdin, stdout
+from importlib import import_module
+
+
+def update(old, new):
+    for key, val in new.items():
+        if key in old and isinstance(val, dict) and isinstance(old[key], dict):
+            update(old[key], val)
+        else:
+            old[key] = val
+
+
+if args.format in binary_formats:
+    stdin = stdin.buffer
+    stdout = stdout.buffer
+    new = b''.join(a.encode('utf-8', 'surrogateescape') for a in args.new)
+else:
+    new = ' '.join(args.new)
+
+module = import_module(args.format)
+data = module.load(stdin)
+root = data
+for key in args.at:
+    root = root.setdefault(key, {})
+update(root, module.loads(new))
+module.dump(data, stdout)
