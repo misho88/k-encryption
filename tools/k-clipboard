@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argcomplete import autocomplete
+from pathlib import Path
+from sys import exit, stdin, stdout
+from subprocess import run, CompletedProcess, PIPE
+from functools import partial
+from shlex import split
+from os import pipe
+
+
+def xclip_get(selection):
+    return run(['xclip', '-out', '-selection', selection], stdout=PIPE)
+
+
+def xclip_set(selection, text):
+    rd, wr = pipe()
+    with open(wr, 'wb') as stream:
+        stream.write(text)
+    with open(rd, 'rb') as stdin:
+        return run(['xclip', '-in', '-selection', selection], stdin=stdin)
+
+
+def termux_get():
+    return run(['termux-clipboard-get'], stdout=PIPE)
+
+
+def termux_set(text):
+    rd, wr = pipe()
+    with open(wr, 'wb') as stream:
+        stream.write(text)
+    with open(rd, 'rb') as stdin:
+        return run(['termux-clipboard-set'], stdin=stdin)
+
+
+GET_CMDS = {
+    'xclip-primary'  : partial(xclip_get, 'primary'),
+    'xclip-secondary': partial(xclip_get, 'secondary'),
+    'xclip-clipboard': partial(xclip_get, 'clipboard'),
+    'termux'         : termux_get,
+}
+SET_CMDS = {
+    'xclip-primary'  : partial(xclip_set, 'primary'),
+    'xclip-secondary': partial(xclip_set, 'secondary'),
+    'xclip-clipboard': partial(xclip_set, 'clipboard'),
+    'termux'         : termux_set,
+}
+AUTOMATIC = 'xclip-primary', 'termux'
+
+
+def get():
+    for cmd in AUTOMATIC:
+        try:
+            return GET_CMDS[cmd]()
+        except FileNotFoundError:
+            pass
+    return CompletedProcess([], 1, b'')
+
+
+def set(text):
+    for cmd in AUTOMATIC:
+        try:
+            return SET_CMDS[cmd](text)
+        except FileNotFoundError:
+            pass
+    return CompletedProcess([], 1)
+
+
+AVAILABLE = ', '.join(GET_CMDS)
+
+prog = Path(__file__)
+epilog = """\
+tries to interact with the clipboard
+"""
+parser = ArgumentParser(
+    prog=prog.name,
+    description='tries to interact with the cliboard',
+    epilog=epilog,
+    formatter_class=RawDescriptionHelpFormatter,
+)
+parser.add_argument(
+    'get_or_set', choices=('get', 'set'),
+    help='if set, expect the new text on stdin; if get, put result on stdout',
+)
+parser.add_argument(
+    'command', nargs='?',
+    help='the cliboard command; if not one of some presets, will be used with '
+         'appropriate shell expansion where "%%T" denotes the new text (only '
+         'relevant for set); if "%%T" is not given the text is passed to stdin; '
+         f'PRESETS: {AVAILABLE}',
+)
+autocomplete(parser)
+args = parser.parse_args()
+
+if args.get_or_set == 'get':
+    if args.command is None:
+        cmd = get
+    elif args.command in GET_CMDS:
+        cmd = GET_CMDS[args.command]
+    else:
+        cmdline = split(args.command)
+        def cmd():
+            return run(cmdline, stdout=PIPE)
+    result = cmd()
+    if result.returncode:
+        exit(result.returncode)
+    stdout.buffer.write(result.stdout)
+    if stdout.isatty():
+        stdout.buffer.write(b'\n')
+else:
+    if args.command is None:
+        cmd = set
+    elif args.command in SET_CMDS:
+        cmd = SET_CMDS[args.command]
+    else:
+        cmdline = split(args.command)
+        if '%T' in cmdline:
+            def cmd(text):
+                return run([text if arg == '%T' else arg for arg in cmdline])
+        else:
+            def cmd(text):
+                return run(cmdline, input=text)
+    result = cmd(stdin.buffer.read())
+    if result.returncode:
+        exit(result.returncode)
