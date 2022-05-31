@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from argcomplete import autocomplete
 from pathlib import Path
 
+KEYCTL = 'keyctl'
 USER_MAX_SIZE = 32767
 
 prog = Path(__file__)
@@ -50,8 +51,15 @@ for cmd in 'set', :
 autocomplete(parser)
 args = parser.parse_args()
 
-from subprocess import run
+from subprocess import run as _run, CompletedProcess
 from sys import stdin, stdout, stderr, exit
+
+
+def run(cmdline, *args, **kwargs):
+    try:
+        return _run(cmdline, *args, **kwargs)
+    except FileNotFoundError:
+        return CompletedProcess(cmdline, 1)
 
 
 def die(result, error=None):
@@ -88,12 +96,12 @@ if args.command == 'list':
     from getpass import getuser
     from pwd import getpwuid, getpwnam
     keys = die(run(
-        [ 'keyctl', 'rlist', args.keyring ],
+        [ KEYCTL, 'rlist', args.keyring ],
         capture_output=True,
     )).stdout.decode()
     for key in keys.split():
         result = run(
-            [ 'keyctl', 'rdescribe', key ],
+            [ KEYCTL, 'rdescribe', key ],
             capture_output=True,
         )
         if result.returncode:
@@ -113,41 +121,41 @@ elif args.command == 'set':
     value = args.value if args.value is not None else stdin.read()
     if args.value is not None:
         result = die(run(
-            [ 'keyctl', 'add', args.type, args.name, args.value, args.keyring ],
+            [ KEYCTL, 'add', args.type, args.name, args.value, args.keyring ],
             capture_output=True,
         ))
     else:
         result = die(run(
-            [ 'keyctl', 'padd', args.type, args.name, args.keyring ],
+            [ KEYCTL, 'padd', args.type, args.name, args.keyring ],
             input=stdin.read(),
             capture_output=True,
         ))
     if args.timeout is not None:
         key = result.stdout.rstrip()
-        die(run([ 'keyctl', 'timeout', key, args.timeout ]))
+        die(run([ KEYCTL, 'timeout', key, args.timeout ]))
 elif args.command == 'get':
     key = die(run(
-        [ 'keyctl', 'request', args.type, args.name, args.keyring ],
+        [ KEYCTL, 'request', args.type, args.name, args.keyring ],
         capture_output=True,
     ), error=f'no such key: {args.name}').stdout.decode().rstrip()
-    die(run([ 'keyctl', 'pipe', key ]))
+    die(run([ KEYCTL, 'pipe', key ]))
     if stdout.isatty():
         stdout.write('\n')
     if args.timeout is not None:
-        die(run([ 'keyctl', 'timeout', key, args.timeout ]))
+        die(run([ KEYCTL, 'timeout', key, args.timeout ]))
 elif args.command == 'del':
     key = die(run(
-        [ 'keyctl', 'request', args.type, args.name, args.keyring ],
+        [ KEYCTL, 'request', args.type, args.name, args.keyring ],
         capture_output=True,
     ), error=f'no such key: {args.name}').stdout.decode().rstrip()
-    die(run([ 'keyctl', 'revoke', key ]))
-    die(run([ 'keyctl', 'unlink', key ], capture_output=True))
+    die(run([ KEYCTL, 'revoke', key ]))
+    die(run([ KEYCTL, 'unlink', key ], capture_output=True))
 elif args.command == 'mod':
     key = die(run(
-        [ 'keyctl', 'request', args.type, args.name, args.keyring ],
+        [ KEYCTL, 'request', args.type, args.name, args.keyring ],
         capture_output=True,
     ), error=f'no such key: {args.name}').stdout.decode().rstrip()
     if args.timeout is not None:
-        die(run([ 'keyctl', 'timeout', key, args.timeout ]))
+        die(run([ KEYCTL, 'timeout', key, args.timeout ]))
 else:
     raise NotImplementedError(args.command)

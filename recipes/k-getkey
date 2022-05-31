@@ -59,7 +59,7 @@ else:
         [ 'k-keygen', salt ] + ([ '--confirm' ] if args.confirm else []),
         capture_output=True),
     )
-    die(run([ 'k-keyctl', 'set', '--timeout', timeout, args.name, result.stdout ]))
+    run([ 'k-keyctl', 'set', '--timeout', timeout, args.name, result.stdout ])
     stdout.buffer.write(result.stdout)
 if stdout.isatty():
     stdout.write('\n')
