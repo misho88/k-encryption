@@ -17,7 +17,12 @@ args = parser.parse_args()
 
 from subprocess import run, CalledProcessError, PIPE
 from sys import stdout, stderr, exit
-from psutil import process_iter
+try:
+    from psutil import process_iter
+except ImportError:
+    def process_iter():
+        return
+        yield
 from getpass import getuser
 from pwd import getpwnam
 
