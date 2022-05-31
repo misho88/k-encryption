@@ -17,6 +17,10 @@ parser.add_argument(
     '--clipboard', '-c',
     help='which clipboard to use (see k-clipboard --help)'
 )
+parser.add_argument(
+    '--clear-clipboard', '-C', action='store_true',
+    help='if passed, '
+)
 
 autocomplete(parser)
 args = parser.parse_args()
@@ -81,5 +85,14 @@ try:
 except CalledProcessError as e:
     print(e, file=stderr)
 finally:
+    if args.clear_clipboard:
+        try:
+            input('ENTER to clear clipboard; CTRL+C to keep clipboard')
+        except KeyboardInterrupt:
+            pass
+        except EOFError:
+            run(clip_cmdline, check=True, input=b'')
+        else:
+            run(clip_cmdline, check=True, input=b'')
     if clipmenud:
         die(sys([ 'clipctl', 'enable' ]))
