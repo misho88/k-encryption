@@ -9,11 +9,20 @@ parser = ArgumentParser(
     prog=prog.name,
     description='interactively select a key and print the value',
 )
-parser.add_argument('clipboard', nargs='?',
-    help="which clipboard to use (see k-clipboard --help)")
+parser.add_argument(
+    'count', nargs='?', type=int,
+    help='how many times to show the selection dialog (default: 1)'
+)
+parser.add_argument(
+    '--clipboard', '-c',
+    help='which clipboard to use (see k-clipboard --help)'
+)
 
 autocomplete(parser)
 args = parser.parse_args()
+if args.count is None:
+    args.count = 1
+
 
 from subprocess import run, CalledProcessError, PIPE
 from sys import stdout, stderr, exit
@@ -61,13 +70,14 @@ if clipmenud:
 
 try:
     menu = 'all' if stdout.isatty() else 'gui'
-    selection = run(
-        [ 'k-select', 'toml', '--menu', menu ],
-        stdout=PIPE,
-        input=data,
-        check=True,
-    ).stdout
-    run(clip_cmdline, check=True, input=selection)
+    for _ in range(args.count):
+        selection = run(
+            [ 'k-select', 'toml', '--menu', menu ],
+            stdout=PIPE,
+            input=data,
+            check=True,
+        ).stdout
+        run(clip_cmdline, check=True, input=selection)
 except CalledProcessError as e:
     print(e, file=stderr)
 finally:
