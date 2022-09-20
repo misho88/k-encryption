@@ -19,6 +19,8 @@ parser.add_argument('--menu', '-m', default='auto',
     help="menu application to use (default: rofi or dmenu)")
 parser.add_argument('--prompt', '-p', default='Key: ',
     help="prompt text")
+parser.add_argument('--key', '-k', action='store_true',
+    help="print key on stderr")
 parser.add_argument('--message', '-s',
     help="extra message")
 
@@ -33,6 +35,16 @@ args = parser.parse_args(own_args)
 
 from subprocess import run, PIPE
 from sys import stdin, stdout, stderr, exit
+from contextlib import contextmanager
+
+
+@contextmanager
+def ensure_isatty(file):
+    if file.isatty():
+        yield file
+        return
+    with open('/dev/tty', 'wb') as file:
+        yield file
 
 
 def die(result, error=None):
@@ -85,12 +97,15 @@ elif args.menu == 'dmenu':
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'fzf':
     cmdline = [ 'fzf' ] + menu_args  # needs stderr to be free
-    key = die(run(cmdline, stdout=PIPE, input=pairs.stdout), 'fzf failed').stdout.rstrip()
+    with ensure_isatty(stderr) as err:
+        key = die(run(cmdline, stdout=PIPE, stderr=err, input=pairs.stdout), 'fzf failed').stdout.rstrip()
 else:
     from shlex import split
     cmdline = split(args.menu) + menu_args
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 
+if args.key:
+    stderr.buffer.write(key)
 
 value = next(v for k, v in zip(
     pairs.stdout.splitlines(keepends=False),
