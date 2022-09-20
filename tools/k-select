@@ -3,6 +3,7 @@
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from pathlib import Path
 from argcomplete import autocomplete
+from sys import argv
 
 formats = 'json', 'toml', 'yaml', 'msgpack', 'pickle'
 binary_formats = 'msgpack', 'pickle'
@@ -22,7 +23,13 @@ parser.add_argument('--message', '-s',
     help="extra message")
 
 autocomplete(parser)
-args = parser.parse_args()
+try:
+    i = argv.index('--')
+except ValueError:
+    own_args, menu_args = argv[1:], []
+else:
+    own_args, menu_args = argv[1:i], argv[i + 1:]
+args = parser.parse_args(own_args)
 
 from subprocess import run, PIPE
 from sys import stdin, stdout, stderr, exit
@@ -69,19 +76,19 @@ if args.menu == 'rofi':
     cmdline = [
         'rofi', '-dmenu', '-no-custom',
         '-p', args.prompt
-    ]
+    ] + menu_args
     if args.message is not None:
         cmdline += [ '-mesg', args.message ]
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'dmenu':
-    cmdline = [ 'dmenu' ]
+    cmdline = [ 'dmenu' ] + menu_args
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'fzf':
-    cmdline = [ 'fzf' ]  # needs stderr to be free
+    cmdline = [ 'fzf' ] + menu_args  # needs stderr to be free
     key = die(run(cmdline, stdout=PIPE, input=pairs.stdout), 'fzf failed').stdout.rstrip()
 else:
     from shlex import split
-    cmdline = split(args.menu)
+    cmdline = split(args.menu) + menu_args
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 
 
