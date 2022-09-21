@@ -76,6 +76,12 @@ def split_keys(keys):
         yield from split_keys(keys[i + 1:])
 
 
+def prinable(key):
+    if '.' in key or not key.isprintable() or any(c.isspace() for c in key):
+        return repr(key)
+    return key
+
+
 # check if clipmenud is running for this user
 uid = getpwnam(getuser()).pw_uid
 clipmenud = any(
@@ -107,11 +113,10 @@ try:
         )
         selection = result.stdout
         run(clip_cmdline, check=True, input=selection)
-        try:
-            query = next(split_keys(result.stderr.decode())) + ' '
-        except StopIteration:
-            query = ''
-        last_dot = 0
+        keys = list(split_keys(result.stderr.decode()))
+        query = '.'.join(prinable(key) for key in keys[:-1])
+        if query:
+            query += '.'
 except CalledProcessError as e:
     print(e, file=stderr)
 finally:
