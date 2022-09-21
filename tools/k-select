@@ -21,6 +21,8 @@ parser.add_argument('--prompt', '-p', default='Key: ',
     help="prompt text")
 parser.add_argument('--key', '-k', action='store_true',
     help="print key on stderr")
+parser.add_argument('--query', '-q',
+    help="initial query text (not all menu support this)")
 parser.add_argument('--message', '-s',
     help="extra message")
 
@@ -96,7 +98,10 @@ elif args.menu == 'dmenu':
     cmdline = [ 'dmenu' ] + menu_args
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'fzf':
-    cmdline = [ 'fzf' ] + menu_args  # needs stderr to be free
+    cmdline = [ 'fzf' ]
+    if args.query is not None:
+        cmdline += '--query', args.query
+    cmdline += menu_args  # needs stderr to be free
     with ensure_isatty(stderr) as err:
         key = die(run(cmdline, stdout=PIPE, stderr=err, input=pairs.stdout), 'fzf failed').stdout.rstrip()
 else:
@@ -106,6 +111,8 @@ else:
 
 if args.key:
     stderr.buffer.write(key)
+    if stderr.isatty():
+        stderr.write('\n')
 
 value = next(v for k, v in zip(
     pairs.stdout.splitlines(keepends=False),
