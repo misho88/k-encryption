@@ -15,16 +15,26 @@ parser = ArgumentParser(
     formatter_class=RawDescriptionHelpFormatter,
 )
 parser.add_argument('format', choices=formats, help='data format')
-parser.add_argument('--menu', '-m', default='auto',
-    help="menu application to use (default: rofi or dmenu)")
-parser.add_argument('--prompt', '-p', default='Key: ',
-    help="prompt text")
-parser.add_argument('--key', '-k', action='store_true',
-    help="print key on stderr")
-parser.add_argument('--query', '-q',
-    help="initial query text (not all menu support this)")
-parser.add_argument('--message', '-s',
-    help="extra message")
+parser.add_argument(
+    '--menu', '-m', default='auto',
+    help="menu application to use (default: rofi or dmenu)",
+)
+parser.add_argument(
+    '--prompt', '-p', default='Key: ',
+    help="prompt text",
+)
+parser.add_argument(
+    '--key', '-k', action='store_true',
+    help="print key on stderr",
+)
+parser.add_argument(
+    '--query', '-q',
+    help="initial query text (not all menu support this)",
+)
+parser.add_argument(
+    '--message', '-s',
+    help="extra message",
+)
 
 autocomplete(parser)
 try:
@@ -93,6 +103,8 @@ if args.menu == 'rofi':
     ] + menu_args
     if args.message is not None:
         cmdline += [ '-mesg', args.message ]
+    if args.query is not None:
+        cmdline += '-filter', args.query
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'dmenu':
     cmdline = [ 'dmenu' ] + menu_args

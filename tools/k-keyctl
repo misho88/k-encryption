@@ -40,8 +40,10 @@ for cmd in 'get', 'set', 'del', 'mod':
 
 for cmd in 'get', 'set', 'mod':
     subparser = subparsers.choices[cmd]
-    subparser.add_argument('--timeout', '-t',
-        help='how long the key should last, in seconds (default: none)')
+    subparser.add_argument(
+        '--timeout', '-t',
+        help='how long the key should last, in seconds (default: none)',
+    )
 
 for cmd in 'set', :
     subparser = subparsers.choices[cmd]

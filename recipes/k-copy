@@ -30,6 +30,7 @@ if args.count is None:
 
 from subprocess import run, CalledProcessError, PIPE
 from sys import stdout, stderr, exit
+from os import environ
 try:
     from psutil import process_iter
 except ImportError:
@@ -100,9 +101,11 @@ data = die(sys([ 'k-read' ])).stdout
 if clipmenud:
     die(sys([ 'clipctl', 'disable' ]))
 
+timeout = environ.get('K_ENCRYPTION_KEY_TIMEOUT', '600')
 try:
     menu = 'all' if stdout.isatty() else 'gui'
-    query = ''
+    result = run([ 'k-keyctl', 'get', 'k-encryption:last-query', '--timeout', timeout ], capture_output=True)
+    query = result.stdout.decode() if result.returncode == 0 else ''
     for _ in range(args.count):
         result = run(
             [ 'k-select', 'toml', '--key', '--menu', menu, '--query', query ],
@@ -117,6 +120,8 @@ try:
         query = '.'.join(prinable(key) for key in keys[:-1])
         if query:
             query += '.'
+    run([ 'k-keyctl', 'set', 'k-encryption:last-query', query, '--timeout', timeout ])
+
 except CalledProcessError as e:
     print(e, file=stderr)
 finally:
