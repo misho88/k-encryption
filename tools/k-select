@@ -29,7 +29,12 @@ parser.add_argument(
 )
 parser.add_argument(
     '--query', '-q',
-    help="initial query text (not all menu support this)",
+    help="initial query text, if the menu program supports it",
+)
+parser.add_argument(
+    '--default-row', '-d', type=int,
+    help="the default row to select, starting with 1, if the menu program "
+         "supports it (and it actually works, which seems to be none of them)",
 )
 parser.add_argument(
     '--message', '-s',
@@ -45,9 +50,9 @@ else:
     own_args, menu_args = argv[1:i], argv[i + 1:]
 args = parser.parse_args(own_args)
 
-from subprocess import run, PIPE
-from sys import stdin, stdout, stderr, exit
-from contextlib import contextmanager
+from subprocess import run, PIPE  # noqa: E402
+from sys import stdin, stdout, stderr, exit  # noqa: E402
+from contextlib import contextmanager  # noqa: E402
 
 
 @contextmanager
@@ -87,7 +92,7 @@ if args.menu in candidate_menu.keys():
     else:
         print(
             'could not find a suitable menu; either specify --menu/-m or '
-            'install one of {", ".join(candidate_menu)}',
+            f'install one of {", ".join(candidate_menu)}',
             file=stderr
         )
         exit(1)
@@ -105,6 +110,8 @@ if args.menu == 'rofi':
         cmdline += [ '-mesg', args.message ]
     if args.query is not None:
         cmdline += '-filter', args.query
+    if args.default_row is not None:
+        cmdline += '-selected-row', f'{args.default_row - 1}'
     key = die(sys(cmdline, input=pairs.stdout)).stdout.rstrip()
 elif args.menu == 'dmenu':
     cmdline = [ 'dmenu' ] + menu_args
